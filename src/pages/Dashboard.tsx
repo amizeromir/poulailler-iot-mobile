@@ -20,6 +20,7 @@ import {
   IonItem,
   IonLabel,
 } from "@ionic/react";
+
 import {
   LineChart,
   Line,
@@ -29,6 +30,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+
+import { Haptics, ImpactStyle } from "@capacitor/haptics";  // <<< VIBRATION ICI
 import API_URL from "../api/config";
 
 interface SensorData {
@@ -52,12 +55,11 @@ const Dashboard: React.FC = () => {
   const [alertMessage, setAlertMessage] = useState("");
   const [showAlert, setShowAlert] = useState(false);
 
-  // États pour les équipements
   const [fanOn, setFanOn] = useState(false);
   const [lampOn, setLampOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
 
-  // 🔄 Charger les données capteurs
+  // 🔄 Charger données capteurs
   const fetchData = async () => {
     try {
       const response = await fetch(`${API_URL}/sensors/latest`);
@@ -72,7 +74,9 @@ const Dashboard: React.FC = () => {
       }));
 
       setData(formatted.reverse());
-      checkAlerts(formatted[formatted.length - 1]);
+
+      const latest = formatted[formatted.length - 1];
+      checkAlerts(latest);
     } catch (error) {
       console.error("Erreur récupération capteurs :", error);
     } finally {
@@ -80,25 +84,31 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // ⚠️ Vérification dynamique des seuils
-  const checkAlerts = (latest: SensorData) => {
+  // ⚠️ Vérification dynamique + vibration
+  const checkAlerts = async (latest: SensorData) => {
     if (!latest) return;
+
+    const vibrate = async () =>
+      await Haptics.impact({ style: ImpactStyle.Heavy });
 
     if (latest.ammonia > 25) {
       setAlertMessage("⚠️ Niveau d’ammoniac trop élevé !");
       setShowAlert(true);
+      vibrate();
     } else if (latest.temperature > 35) {
       setAlertMessage("🔥 Température trop élevée !");
       setShowAlert(true);
+      vibrate();
     } else if (latest.humidity < 30) {
       setAlertMessage("💧 Humidité trop faible !");
       setShowAlert(true);
+      vibrate();
     } else {
       setShowAlert(false);
     }
   };
 
-  // 🚨 Récupération des alertes depuis le backend
+  // 🚨 Charger liste des alertes (backend)
   const fetchAlerts = async () => {
     try {
       const res = await fetch(`${API_URL}/alerts`);
@@ -109,35 +119,26 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // 🚪 Déconnexion
   const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/login";
   };
 
-  // 🧠 Contrôle des équipements (placeholder)
   const toggleDevice = (device: string) => {
-    switch (device) {
-      case "fan":
-        setFanOn(!fanOn);
-        break;
-      case "lamp":
-        setLampOn(!lampOn);
-        break;
-      case "water":
-        setWaterOn(!waterOn);
-        break;
-    }
-    console.log(`Action envoyée à ${device}`);
+    if (device === "fan") setFanOn(!fanOn);
+    if (device === "lamp") setLampOn(!lampOn);
+    if (device === "water") setWaterOn(!waterOn);
   };
 
   useEffect(() => {
     fetchData();
     fetchAlerts();
+
     const interval = setInterval(() => {
       fetchData();
       fetchAlerts();
     }, 10000);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -162,7 +163,7 @@ const Dashboard: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* ⚠️ Alertes dynamiques */}
+            {/* ALERTE AVEC VIBRATION */}
             {showAlert && (
               <IonAlert
                 isOpen={showAlert}
@@ -173,7 +174,7 @@ const Dashboard: React.FC = () => {
               />
             )}
 
-            {/* 🔘 Contrôle des équipements */}
+            {/* CONTROLE DES EQUIPEMENTS */}
             <IonCard>
               <IonCardHeader>
                 <IonCardTitle>⚙️ Contrôle des équipements</IonCardTitle>
@@ -213,7 +214,7 @@ const Dashboard: React.FC = () => {
               </IonCardContent>
             </IonCard>
 
-            {/* 📊 Données récentes */}
+            {/* DONNEES RECENTES */}
             <IonGrid>
               <IonRow>
                 <IonCol size="6">
@@ -273,7 +274,7 @@ const Dashboard: React.FC = () => {
               </IonRow>
             </IonGrid>
 
-            {/* 📈 Graphique */}
+            {/* GRAPHIQUE */}
             <IonCard>
               <IonCardHeader>
                 <IonCardTitle>Évolution des mesures</IonCardTitle>
@@ -281,8 +282,8 @@ const Dashboard: React.FC = () => {
               <IonCardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={data}>
-                    <Line type="monotone" dataKey="temperature" stroke="#ff7300" name="Température" />
-                    <Line type="monotone" dataKey="humidity" stroke="#007bff" name="Humidité" />
+                    <Line type="monotone" dataKey="temperature" stroke="#ff7300" />
+                    <Line type="monotone" dataKey="humidity" stroke="#007bff" />
                     <CartesianGrid stroke="#ccc" />
                     <XAxis dataKey="timestamp" hide />
                     <YAxis />
@@ -292,30 +293,31 @@ const Dashboard: React.FC = () => {
               </IonCardContent>
             </IonCard>
 
-            {/* 📢 Liste des alertes dynamiques */}
+            {/* LISTE DES ALERTES */}
             <IonCard>
               <IonCardHeader>
                 <IonCardTitle>📢 Alertes récentes</IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
                 <IonList>
-                  {alerts.length === 0 && (
-                    <IonItem><IonLabel>Aucune alerte pour le moment.</IonLabel></IonItem>
+                  {alerts.length === 0 ? (
+                    <IonItem><IonLabel>Aucune alerte.</IonLabel></IonItem>
+                  ) : (
+                    alerts.map((a, i) => (
+                      <IonItem key={i} color="danger">
+                        <IonLabel>
+                          <h2>{a.type}</h2>
+                          <p>{a.message}</p>
+                          <small>{new Date(a.timestamp).toLocaleString()}</small>
+                        </IonLabel>
+                      </IonItem>
+                    ))
                   )}
-                  {alerts.map((a, i) => (
-                    <IonItem key={i} color="danger">
-                      <IonLabel>
-                        <h2>{a.type}</h2>
-                        <p>{a.message}</p>
-                        <small>{new Date(a.timestamp).toLocaleString()}</small>
-                      </IonLabel>
-                    </IonItem>
-                  ))}
                 </IonList>
               </IonCardContent>
             </IonCard>
 
-            {/* 📋 Historique */}
+            {/* HISTORIQUE */}
             <IonCard>
               <IonCardHeader>
                 <IonCardTitle>Historique des mesures</IonCardTitle>
