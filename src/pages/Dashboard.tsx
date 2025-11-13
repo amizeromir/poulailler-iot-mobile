@@ -16,6 +16,9 @@ import {
   IonSpinner,
   IonAlert,
   IonChip,
+  IonList,
+  IonItem,
+  IonLabel,
 } from "@ionic/react";
 import {
   LineChart,
@@ -36,8 +39,15 @@ interface SensorData {
   timestamp: string;
 }
 
+interface AlertData {
+  type: string;
+  message: string;
+  timestamp: string;
+}
+
 const Dashboard: React.FC = () => {
   const [data, setData] = useState<SensorData[]>([]);
+  const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [loading, setLoading] = useState(true);
   const [alertMessage, setAlertMessage] = useState("");
   const [showAlert, setShowAlert] = useState(false);
@@ -88,13 +98,24 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // 🚨 Récupération des alertes depuis le backend
+  const fetchAlerts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/alerts`);
+      const data = await res.json();
+      setAlerts(data);
+    } catch (err) {
+      console.error("Erreur récupération alertes:", err);
+    }
+  };
+
   // 🚪 Déconnexion
   const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/login";
   };
 
-  // 🧠 Contrôle des équipements (placeholder — futur lien avec ESP32)
+  // 🧠 Contrôle des équipements (placeholder)
   const toggleDevice = (device: string) => {
     switch (device) {
       case "fan":
@@ -107,14 +128,16 @@ const Dashboard: React.FC = () => {
         setWaterOn(!waterOn);
         break;
     }
-
-    // 🚀 FUTUR : envoyer un signal MQTT ou HTTP à l’ESP32
     console.log(`Action envoyée à ${device}`);
   };
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    fetchAlerts();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchAlerts();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -150,7 +173,7 @@ const Dashboard: React.FC = () => {
               />
             )}
 
-            {/* 🔘 Boutons de contrôle */}
+            {/* 🔘 Contrôle des équipements */}
             <IonCard>
               <IonCardHeader>
                 <IonCardTitle>⚙️ Contrôle des équipements</IonCardTitle>
@@ -266,6 +289,29 @@ const Dashboard: React.FC = () => {
                     <Tooltip />
                   </LineChart>
                 </ResponsiveContainer>
+              </IonCardContent>
+            </IonCard>
+
+            {/* 📢 Liste des alertes dynamiques */}
+            <IonCard>
+              <IonCardHeader>
+                <IonCardTitle>📢 Alertes récentes</IonCardTitle>
+              </IonCardHeader>
+              <IonCardContent>
+                <IonList>
+                  {alerts.length === 0 && (
+                    <IonItem><IonLabel>Aucune alerte pour le moment.</IonLabel></IonItem>
+                  )}
+                  {alerts.map((a, i) => (
+                    <IonItem key={i} color="danger">
+                      <IonLabel>
+                        <h2>{a.type}</h2>
+                        <p>{a.message}</p>
+                        <small>{new Date(a.timestamp).toLocaleString()}</small>
+                      </IonLabel>
+                    </IonItem>
+                  ))}
+                </IonList>
               </IonCardContent>
             </IonCard>
 
