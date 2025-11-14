@@ -34,6 +34,7 @@ import {
 import { Haptics, ImpactStyle } from "@capacitor/haptics";  // <<< VIBRATION ICI
 import API_URL from "../api/config";
 
+
 interface SensorData {
   temperature: number;
   humidity: number;

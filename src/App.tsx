@@ -5,10 +5,11 @@ import {
   setupIonicReact,
 } from "@ionic/react";
 import { IonReactRouter } from "@ionic/react-router";
+
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 
-/* ✅ Styles de base Ionic */
+/* Styles de base Ionic */
 import "@ionic/react/css/core.css";
 import "@ionic/react/css/normalize.css";
 import "@ionic/react/css/structure.css";
@@ -20,11 +21,18 @@ import "@ionic/react/css/text-transformation.css";
 import "@ionic/react/css/flex-utils.css";
 import "@ionic/react/css/display.css";
 
+import { useEffect } from "react";
+import { requestNotificationPermission } from "./permissions/notifications";
+
 setupIonicReact();
 
 const App: React.FC = () => {
-  // 🔐 Vérifie si un token existe dans le localStorage
   const isAuthenticated = !!localStorage.getItem("token");
+
+  // 🔔 Demande automatiquement la permission dès le lancement de l’app
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   return (
     <IonApp>
@@ -41,7 +49,11 @@ const App: React.FC = () => {
           </Route>
 
           {/* Redirection par défaut */}
-          <Redirect exact from="/" to={isAuthenticated ? "/dashboard" : "/login"} />
+          <Redirect
+            exact
+            from="/"
+            to={isAuthenticated ? "/dashboard" : "/login"}
+          />
         </IonRouterOutlet>
       </IonReactRouter>
     </IonApp>
