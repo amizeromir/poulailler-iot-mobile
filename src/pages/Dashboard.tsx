@@ -1,3 +1,4 @@
+// Dashboard.tsx
 import React, { useEffect, useState } from "react";
 import {
   IonPage,
@@ -31,12 +32,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import { Haptics, ImpactStyle } from "@capacitor/haptics";  // <<< VIBRATION ICI
-import API_URL from "../api/config";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import API_URL from "../api/config"; // Assurez-vous que cette importation est correcte
 
-
+// --- INTERFACES ---
 interface SensorData {
-  temperature: number;
+  temperature: number; 
   humidity: number;
   ammonia: number;
   luminosity: number;
@@ -60,26 +61,57 @@ const Dashboard: React.FC = () => {
   const [lampOn, setLampOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
 
+  // Helper 1: Sécurise l'appel à toFixed() contre les valeurs non numériques (null/undefined/NaN)
+  const safeToFixed = (value: any, digits: number): string => {
+    const num = Number(value);
+    // Vérifie si la valeur est un nombre et n'est pas NaN
+    if (typeof num === 'number' && !isNaN(num) && value !== null && value !== undefined) {
+      return num.toFixed(digits);
+    }
+    return 'N/A';
+  };
+
+  // Helper 2: Gère les structures de données incohérentes de l'API (directe OU objet avec .value)
+  const getSensorValue = (item: any, key: string): number => {
+      const prop = item[key];
+      // Si la propriété est un objet et a une clé 'value', on prend .value
+      if (typeof prop === 'object' && prop !== null && 'value' in prop) {
+          return Number(prop.value) || 0;
+      }
+      // Sinon, on prend la propriété directement (si elle est numérique)
+      return Number(prop) || 0;
+  };
+
   // 🔄 Charger données capteurs
   const fetchData = async () => {
     try {
+      // La route /latest est censée renvoyer le document le plus récent à l'index [0]
       const response = await fetch(`${API_URL}/sensors/latest`);
+      
+      if (response.status === 500) {
+        throw new Error("Erreur 500: Erreur interne du serveur API.");
+      }
+      
       const json = await response.json();
 
       const formatted = json.map((item: any) => ({
-        temperature: item.temperature?.value || 0,
-        humidity: item.humidity?.value || 0,
-        ammonia: item.ammonia?.value || 0,
-        luminosity: item.luminosity?.value || 0,
+        temperature: getSensorValue(item, 'temperature'),
+        humidity: getSensorValue(item, 'humidity'),
+        ammonia: getSensorValue(item, 'ammonia'),
+        luminosity: getSensorValue(item, 'luminosity'),
         timestamp: new Date(item.timestamp).toLocaleString(),
       }));
 
-      setData(formatted.reverse());
+      // Stocke le tableau pour le graphique. Le plus récent est à l'index [0]
+      setData(formatted); 
 
-      const latest = formatted[formatted.length - 1];
+      // La dernière lecture est la première entrée du tableau
+      const latest = formatted[0];
       checkAlerts(latest);
     } catch (error) {
       console.error("Erreur récupération capteurs :", error);
+      setAlertMessage(`Erreur de connexion : ${error instanceof Error ? error.message : "Erreur inconnue."}`);
+      setShowAlert(true);
     } finally {
       setLoading(false);
     }
@@ -87,13 +119,14 @@ const Dashboard: React.FC = () => {
 
   // ⚠️ Vérification dynamique + vibration
   const checkAlerts = async (latest: SensorData) => {
-    if (!latest) return;
+    // S'assurer que latest existe et que les valeurs sont réelles
+    if (!latest || latest.temperature === 0 || latest.humidity === 0 || latest.ammonia === 0) return;
 
     const vibrate = async () =>
       await Haptics.impact({ style: ImpactStyle.Heavy });
 
     if (latest.ammonia > 25) {
-      setAlertMessage("⚠️ Niveau d’ammoniac trop élevé !");
+      setAlertMessage("⚠️ Niveau d'ammoniac trop élevé !");
       setShowAlert(true);
       vibrate();
     } else if (latest.temperature > 35) {
@@ -120,17 +153,71 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // 🎮 Contrôler l'ESP32
+  const controlESP32 = async (component: string, action: string) => {
+    try {
+      let mqttCommand = "";
+      if (component === "fan" && action === "on") mqttCommand = "fan_on";
+      else if (component === "fan" && action === "off") mqttCommand = "fan_off";
+      else if (component === "lamp" && action === "on") mqttCommand = "light_on";
+      else if (component === "lamp" && action === "off") mqttCommand = "light_off";
+      else if (component === "water" && action === "on") mqttCommand = "water_on";
+      else if (component === "water" && action === "off") mqttCommand = "water_off";
+
+      console.log(`🎮 Envoi commande: ${mqttCommand}`);
+
+      const response = await fetch(`${API_URL}/control`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          device: "device1",
+          command: mqttCommand
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur backend: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Commande envoyée avec succès:', result);
+      
+      await Haptics.impact({ style: ImpactStyle.Light });
+      
+    } catch (error) {
+      console.error('❌ Erreur envoi commande:', error);
+      setAlertMessage("Erreur: Impossible d'envoyer la commande au poulailler");
+      setShowAlert(true);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/login";
   };
 
+  // 🎯 Toggle
   const toggleDevice = (device: string) => {
-    if (device === "fan") setFanOn(!fanOn);
-    if (device === "lamp") setLampOn(!lampOn);
-    if (device === "water") setWaterOn(!waterOn);
+    if (device === "fan") {
+      const newState = !fanOn;
+      setFanOn(newState);
+      controlESP32("fan", newState ? "on" : "off");
+    }
+    if (device === "lamp") {
+      const newState = !lampOn;
+      setLampOn(newState);
+      controlESP32("lamp", newState ? "on" : "off");
+    }
+    if (device === "water") {
+      const newState = !waterOn;
+      setWaterOn(newState);
+      // controlESP32("water", newState ? "on" : "off");
+    }
   };
 
+  // --- HOOK DE MONTAGE ET INTERVALLE ---
   useEffect(() => {
     fetchData();
     fetchAlerts();
@@ -138,12 +225,13 @@ const Dashboard: React.FC = () => {
     const interval = setInterval(() => {
       fetchData();
       fetchAlerts();
-    }, 10000);
+    }, 10000); 
 
     return () => clearInterval(interval);
   }, []);
 
-  const latest = data[data.length - 1] || {};
+  // La dernière donnée est à l'index 0 (si la requête API est correcte)
+  const latest = data[0] || {};
 
   return (
     <IonPage>
@@ -224,7 +312,7 @@ const Dashboard: React.FC = () => {
                       <IonCardTitle>🌡️ Température</IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
-                      <h2>{latest.temperature} °C</h2>
+                      <h2>{safeToFixed(latest.temperature, 1)} °C</h2> 
                       {latest.temperature > 35 && (
                         <IonChip color="danger">🔥 Trop chaud</IonChip>
                       )}
@@ -238,7 +326,7 @@ const Dashboard: React.FC = () => {
                       <IonCardTitle>💧 Humidité</IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
-                      <h2>{latest.humidity} %</h2>
+                      <h2>{safeToFixed(latest.humidity, 1)} %</h2>
                       {latest.humidity < 30 && (
                         <IonChip color="warning">⚠️ Faible humidité</IonChip>
                       )}
@@ -254,13 +342,13 @@ const Dashboard: React.FC = () => {
                       <IonCardTitle>☁️ Ammoniac (NH₃)</IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
-                      <h2>{latest.ammonia} ppm</h2>
+                      <h2>{safeToFixed(latest.ammonia, 0)} ppm</h2>
                       {latest.ammonia > 25 && (
                         <IonChip color="danger">☠️ Niveau dangereux</IonChip>
                       )}
                     </IonCardContent>
                   </IonCard>
-                </IonCol>
+                </IonCol> {/* <-- FERMETURE CORRECTE DE LA BALISE IONIC */}
 
                 <IonCol size="6">
                   <IonCard>
@@ -268,7 +356,7 @@ const Dashboard: React.FC = () => {
                       <IonCardTitle>💡 Luminosité</IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
-                      <h2>{latest.luminosity} lx</h2>
+                      <h2>{safeToFixed(latest.luminosity, 0)} lx</h2>
                     </IonCardContent>
                   </IonCard>
                 </IonCol>
@@ -321,7 +409,8 @@ const Dashboard: React.FC = () => {
             {/* HISTORIQUE */}
             <IonCard>
               <IonCardHeader>
-                <IonCardTitle>Historique des mesures</IonCardTitle>
+                {/* CORRECTION DE LA FAUTE DE FRAPPE IonFName -> IonCardTitle */}
+                <IonCardTitle>Historique des mesures</IonCardTitle> 
               </IonCardHeader>
               <IonCardContent>
                 <div style={{ overflowX: "auto" }}>
@@ -339,10 +428,10 @@ const Dashboard: React.FC = () => {
                       {data.map((item, index) => (
                         <tr key={index}>
                           <td>{item.timestamp}</td>
-                          <td>{item.temperature}</td>
-                          <td>{item.humidity}</td>
-                          <td>{item.ammonia}</td>
-                          <td>{item.luminosity}</td>
+                          <td>{safeToFixed(item.temperature, 1)}</td>
+                          <td>{safeToFixed(item.humidity, 1)}</td>
+                          <td>{safeToFixed(item.ammonia, 0)}</td>
+                          <td>{safeToFixed(item.luminosity, 0)}</td>
                         </tr>
                       ))}
                     </tbody>
