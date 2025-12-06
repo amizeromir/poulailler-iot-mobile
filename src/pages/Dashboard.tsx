@@ -1,4 +1,4 @@
-// Dashboard.tsx
+// Dashboard.tsx - VERSION CORRIGÉE
 import React, { useEffect, useState } from "react";
 import {
   IonPage,
@@ -9,6 +9,7 @@ import {
   IonCard,
   IonCardHeader,
   IonCardTitle,
+  IonCardSubtitle,
   IonCardContent,
   IonButton,
   IonGrid,
@@ -20,7 +21,23 @@ import {
   IonList,
   IonItem,
   IonLabel,
+  IonIcon,
+  IonBadge,
+  IonSegment,
+  IonSegmentButton,
 } from "@ionic/react";
+import { 
+  thermometerOutline, 
+  waterOutline, 
+  warningOutline, 
+  sunnyOutline,
+  flashOutline,
+  bulbOutline,
+  refreshOutline,
+  logOutOutline,
+  statsChartOutline,
+  listOutline
+} from "ionicons/icons";
 
 import {
   LineChart,
@@ -29,273 +46,812 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
 
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import API_URL from "../api/config"; // Assurez-vous que cette importation est correcte
+import API_URL from "../api/config";
 
 // --- INTERFACES ---
 interface SensorData {
-  temperature: number; 
+  _id: string;
+  deviceId: string;
+  originalDevice: string;
+  capteurNum: number;
+  temperature: number;
   humidity: number;
   ammonia: number;
   luminosity: number;
   timestamp: string;
+  lastUpdated: string;
 }
 
 interface AlertData {
+  _id: string;
+  deviceId: string;
   type: string;
   message: string;
+  value: number;
   timestamp: string;
+  resolved: boolean;
 }
 
+interface ControlState {
+  fan: boolean;
+  lamp: boolean;
+  water: boolean;
+}
+
+// --- STYLES CSS INTÉGRÉS ---
+const dashboardStyles = `
+/* Dashboard Styles */
+.dashboard-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.sensor-card {
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.sensor-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.sensor-value {
+  text-align: center;
+  padding: 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,249,252,0.9) 100%);
+  margin: 8px 0;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.sensor-value h2 {
+  margin: 12px 0 6px 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.sensor-value p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.sensor-value ion-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Temperature status */
+.temp-high {
+  background: linear-gradient(135deg, #ff9966, #ff5e62) !important;
+  color: white !important;
+}
+
+.temp-high ion-card-title,
+.temp-high ion-card-subtitle {
+  color: white !important;
+}
+
+.temp-normal {
+  background: linear-gradient(135deg, #36d1dc, #5b86e5) !important;
+  color: white !important;
+}
+
+.temp-low {
+  background: linear-gradient(135deg, #00b09b, #96c93d) !important;
+  color: white !important;
+}
+
+/* Control buttons */
+.control-button {
+  --border-radius: 12px;
+  --padding-top: 18px;
+  --padding-bottom: 18px;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+}
+
+.control-button-on {
+  --background: linear-gradient(135deg, #2dd36f 0%, #28ba62 100%);
+  --background-activated: #28ba62;
+}
+
+.control-button-off {
+  --background: linear-gradient(135deg, #92949c 0%, #7a7c85 100%);
+  --background-activated: #7a7c85;
+}
+
+/* Alert card */
+.alert-card {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff5252 100%);
+  color: white;
+  border-radius: 16px;
+  margin: 16px 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+}
+
+/* Chart styling */
+.chart-container {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  margin: 16px 0;
+}
+
+/* Stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-item {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.03);
+}
+
+.stat-item h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.8rem;
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.stat-item p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Segment styling */
+.custom-segment {
+  --background: #f8f9fa;
+  border-radius: 12px;
+  margin: 16px 0;
+  padding: 4px;
+}
+
+.custom-segment ion-segment-button {
+  --border-radius: 10px;
+  --color: #7f8c8d;
+  --color-checked: white;
+  --indicator-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-weight: 600;
+}
+
+/* Loading spinner */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+}
+
+.loading-text {
+  margin-top: 20px;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sensor-value h2 {
+    font-size: 1.7rem;
+  }
+  
+  .control-button {
+    --padding-top: 14px;
+    --padding-bottom: 14px;
+    font-size: 0.9rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .sensor-value h2 {
+    font-size: 1.5rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+`;
+
+// Fonction pour injecter le CSS
+const injectStyles = () => {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = dashboardStyles;
+  document.head.appendChild(styleElement);
+  return () => styleElement.remove();
+};
+
 const Dashboard: React.FC = () => {
-  const [data, setData] = useState<SensorData[]>([]);
+  // Injecter le CSS au montage
+  useEffect(() => {
+    const cleanup = injectStyles();
+    return cleanup;
+  }, []);
+
+  // États principaux
+  const [allSensors, setAllSensors] = useState<SensorData[]>([]);
+  const [activeSensors, setActiveSensors] = useState<SensorData[]>([]);
   const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [loading, setLoading] = useState(true);
   const [alertMessage, setAlertMessage] = useState("");
   const [showAlert, setShowAlert] = useState(false);
+  const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
+  const [lastUpdate, setLastUpdate] = useState<string>('');
 
-  const [fanOn, setFanOn] = useState(false);
-  const [lampOn, setLampOn] = useState(false);
-  const [waterOn, setWaterOn] = useState(false);
+  // Contrôle des actionneurs
+  const [controls, setControls] = useState<ControlState>({
+    fan: false,
+    lamp: false,
+    water: false
+  });
 
-  // Helper 1: Sécurise l'appel à toFixed() contre les valeurs non numériques (null/undefined/NaN)
+  // Helper: Formatage sécurisé des nombres
   const safeToFixed = (value: any, digits: number): string => {
     const num = Number(value);
-    // Vérifie si la valeur est un nombre et n'est pas NaN
     if (typeof num === 'number' && !isNaN(num) && value !== null && value !== undefined) {
       return num.toFixed(digits);
     }
-    return 'N/A';
+    return '--';
   };
 
-  // Helper 2: Gère les structures de données incohérentes de l'API (directe OU objet avec .value)
-  const getSensorValue = (item: any, key: string): number => {
-      const prop = item[key];
-      // Si la propriété est un objet et a une clé 'value', on prend .value
-      if (typeof prop === 'object' && prop !== null && 'value' in prop) {
-          return Number(prop.value) || 0;
-      }
-      // Sinon, on prend la propriété directement (si elle est numérique)
-      return Number(prop) || 0;
-  };
-
-  // 🔄 Charger données capteurs
-  const fetchData = async () => {
+  // ================================
+  // 🔄 CHARGER LES 3 CAPTEURS - VERSION CORRIGÉE
+  // ================================
+  const fetchAllSensors = async () => {
     try {
-      // La route /latest est censée renvoyer le document le plus récent à l'index [0]
-      const response = await fetch(`${API_URL}/sensors/latest`);
+      setLoading(true);
       
-      if (response.status === 500) {
-        throw new Error("Erreur 500: Erreur interne du serveur API.");
+      // ✅ UTILISER LA ROUTE QUI EXISTE : /api/sensors/three-sensors
+      const response = await fetch(`${API_URL}/sensors/three-sensors`);
+      
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
       }
       
-      const json = await response.json();
-
-      const formatted = json.map((item: any) => ({
-        temperature: getSensorValue(item, 'temperature'),
-        humidity: getSensorValue(item, 'humidity'),
-        ammonia: getSensorValue(item, 'ammonia'),
-        luminosity: getSensorValue(item, 'luminosity'),
-        timestamp: new Date(item.timestamp).toLocaleString(),
-      }));
-
-      // Stocke le tableau pour le graphique. Le plus récent est à l'index [0]
-      setData(formatted); 
-
-      // La dernière lecture est la première entrée du tableau
-      const latest = formatted[0];
-      checkAlerts(latest);
+      const result = await response.json();
+      
+      if (result.success && result.capteurs) {
+        const formatted = result.capteurs.map((sensor: any) => ({
+          _id: sensor.id || `sensor-${Date.now()}`,
+          deviceId: sensor.deviceId,
+          originalDevice: "device1",
+          capteurNum: sensor.capteurNum,
+          temperature: sensor.temperature || 0,
+          humidity: sensor.humidity || 0,
+          ammonia: sensor.ammonia || 0,
+          luminosity: sensor.luminosity || 0,
+          timestamp: sensor.timestamp ? new Date(sensor.timestamp).toLocaleString() : new Date().toLocaleString(),
+          lastUpdated: sensor.lastUpdated ? new Date(sensor.lastUpdated).toLocaleTimeString() : new Date().toLocaleTimeString()
+        }));
+        
+        setAllSensors(formatted);
+        setActiveSensors(formatted);
+        setLastUpdate(new Date().toLocaleTimeString());
+        
+        // Vérifier les alertes
+        checkAllAlerts(formatted);
+      }
     } catch (error) {
-      console.error("Erreur récupération capteurs :", error);
-      setAlertMessage(`Erreur de connexion : ${error instanceof Error ? error.message : "Erreur inconnue."}`);
+      console.error("❌ Erreur récupération capteurs :", error);
+      
+      // ✅ DONNÉES MOCKÉES SI L'API ÉCHOUE
+      const mockSensors = [
+        {
+          _id: "capteur1-mock",
+          deviceId: "device1-capteur1",
+          originalDevice: "device1",
+          capteurNum: 1,
+          temperature: 23.2,
+          humidity: 55.0,
+          ammonia: 0,
+          luminosity: 0,
+          timestamp: new Date().toLocaleString(),
+          lastUpdated: new Date().toLocaleTimeString()
+        },
+        {
+          _id: "capteur2-mock",
+          deviceId: "device1-capteur2",
+          originalDevice: "device1",
+          capteurNum: 2,
+          temperature: 23.5,
+          humidity: 52.0,
+          ammonia: 0,
+          luminosity: 0,
+          timestamp: new Date().toLocaleString(),
+          lastUpdated: new Date().toLocaleTimeString()
+        },
+        {
+          _id: "capteur3-mock",
+          deviceId: "device1-capteur3",
+          originalDevice: "device1",
+          capteurNum: 3,
+          temperature: 20.4,
+          humidity: 56.0,
+          ammonia: 0,
+          luminosity: 0,
+          timestamp: new Date().toLocaleString(),
+          lastUpdated: new Date().toLocaleTimeString()
+        }
+      ];
+      
+      setAllSensors(mockSensors);
+      setActiveSensors(mockSensors);
+      setLastUpdate(new Date().toLocaleTimeString());
+      
+      setAlertMessage("Mode démo: Données de test");
       setShowAlert(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // ⚠️ Vérification dynamique + vibration
-  const checkAlerts = async (latest: SensorData) => {
-    // S'assurer que latest existe et que les valeurs sont réelles
-    if (!latest || latest.temperature === 0 || latest.humidity === 0 || latest.ammonia === 0) return;
-
-    const vibrate = async () =>
-      await Haptics.impact({ style: ImpactStyle.Heavy });
-
-    if (latest.ammonia > 25) {
-      setAlertMessage("⚠️ Niveau d'ammoniac trop élevé !");
+  // ⚠️ Vérification des alertes pour TOUS les capteurs
+  const checkAllAlerts = async (sensors: SensorData[]) => {
+    const vibrate = async () => await Haptics.impact({ style: ImpactStyle.Medium });
+    
+    let hasAlert = false;
+    let alertMsg = "";
+    
+    sensors.forEach(sensor => {
+      if (sensor.ammonia > 25) {
+        alertMsg = `⚠️ Capteur ${sensor.capteurNum}: Ammoniac élevé (${sensor.ammonia} ppm)`;
+        hasAlert = true;
+      } else if (sensor.temperature > 35) {
+        alertMsg = `🔥 Capteur ${sensor.capteurNum}: Température élevée (${sensor.temperature}°C)`;
+        hasAlert = true;
+      } else if (sensor.humidity < 30) {
+        alertMsg = `💧 Capteur ${sensor.capteurNum}: Humidité faible (${sensor.humidity}%)`;
+        hasAlert = true;
+      }
+    });
+    
+    if (hasAlert) {
+      setAlertMessage(alertMsg);
       setShowAlert(true);
-      vibrate();
-    } else if (latest.temperature > 35) {
-      setAlertMessage("🔥 Température trop élevée !");
-      setShowAlert(true);
-      vibrate();
-    } else if (latest.humidity < 30) {
-      setAlertMessage("💧 Humidité trop faible !");
-      setShowAlert(true);
-      vibrate();
-    } else {
-      setShowAlert(false);
+      await vibrate();
     }
   };
 
-  // 🚨 Charger liste des alertes (backend)
+  // 🚨 Charger les alertes
   const fetchAlerts = async () => {
     try {
-      const res = await fetch(`${API_URL}/alerts`);
-      const data = await res.json();
-      setAlerts(data);
-    } catch (err) {
-      console.error("Erreur récupération alertes:", err);
+      const response = await fetch(`${API_URL}/alerts`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const recentAlerts = result.data
+            .filter((alert: AlertData) => !alert.resolved)
+            .slice(0, 5);
+          setAlerts(recentAlerts);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Erreur récupération alertes:", error);
     }
   };
 
-  // 🎮 Contrôler l'ESP32
-  const controlESP32 = async (component: string, action: string) => {
+  // 🎮 Contrôler les actionneurs
+  const controlESP32 = async (component: keyof ControlState, action: 'on' | 'off') => {
     try {
-      let mqttCommand = "";
-      if (component === "fan" && action === "on") mqttCommand = "fan_on";
-      else if (component === "fan" && action === "off") mqttCommand = "fan_off";
-      else if (component === "lamp" && action === "on") mqttCommand = "light_on";
-      else if (component === "lamp" && action === "off") mqttCommand = "light_off";
-      else if (component === "water" && action === "on") mqttCommand = "water_on";
-      else if (component === "water" && action === "off") mqttCommand = "water_off";
+      const commands: {[key: string]: string} = {
+        'fan_on': 'fan_on',
+        'fan_off': 'fan_off',
+        'lamp_on': 'light_on',
+        'lamp_off': 'light_off',
+        'water_on': 'water_on',
+        'water_off': 'water_off'
+      };
 
-      console.log(`🎮 Envoi commande: ${mqttCommand}`);
+      const commandKey = `${component}_${action}`;
+      const mqttCommand = commands[commandKey];
+
+      if (!mqttCommand) {
+        throw new Error('Commande inconnue');
+      }
 
       const response = await fetch(`${API_URL}/control`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           device: "device1",
           command: mqttCommand
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Erreur backend: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Erreur backend: ${response.status}`);
 
-      const result = await response.json();
-      console.log('✅ Commande envoyée avec succès:', result);
-      
+      setControls(prev => ({
+        ...prev,
+        [component]: action === 'on'
+      }));
+
       await Haptics.impact({ style: ImpactStyle.Light });
       
     } catch (error) {
       console.error('❌ Erreur envoi commande:', error);
-      setAlertMessage("Erreur: Impossible d'envoyer la commande au poulailler");
+      setAlertMessage("Erreur: Impossible d'envoyer la commande");
       setShowAlert(true);
     }
   };
 
+  // 🔄 Rafraîchir manuellement
+  const handleRefresh = async () => {
+    await fetchAllSensors();
+    await fetchAlerts();
+    await Haptics.impact({ style: ImpactStyle.Light });
+  };
+
+  // 🚪 Déconnexion
   const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/login";
   };
 
-  // 🎯 Toggle
-  const toggleDevice = (device: string) => {
-    if (device === "fan") {
-      const newState = !fanOn;
-      setFanOn(newState);
-      controlESP32("fan", newState ? "on" : "off");
-    }
-    if (device === "lamp") {
-      const newState = !lampOn;
-      setLampOn(newState);
-      controlESP32("lamp", newState ? "on" : "off");
-    }
-    if (device === "water") {
-      const newState = !waterOn;
-      setWaterOn(newState);
-      // controlESP32("water", newState ? "on" : "off");
-    }
+  // 📊 Préparer les données pour les graphiques
+  const prepareChartData = () => {
+    if (allSensors.length === 0) return [];
+    
+    const recentData = [...allSensors]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 10)
+      .reverse();
+    
+    return recentData.map(item => ({
+      time: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      temp: item.temperature,
+      hum: item.humidity,
+      sensor: `Capteur ${item.capteurNum}`
+    }));
   };
 
-  // --- HOOK DE MONTAGE ET INTERVALLE ---
+  // 🎯 Calculer les moyennes
+  const calculateAverages = () => {
+    if (activeSensors.length === 0) return { temp: 0, hum: 0, amm: 0 };
+    
+    const validSensors = activeSensors.filter(s => s.temperature > 0);
+    if (validSensors.length === 0) return { temp: 0, hum: 0, amm: 0 };
+    
+    const avgTemp = validSensors.reduce((sum, sensor) => sum + sensor.temperature, 0) / validSensors.length;
+    const avgHum = validSensors.reduce((sum, sensor) => sum + sensor.humidity, 0) / validSensors.length;
+    const avgAmm = validSensors.reduce((sum, sensor) => sum + sensor.ammonia, 0) / validSensors.length;
+    
+    return { temp: avgTemp, hum: avgHum, amm: avgAmm };
+  };
+
+  const averages = calculateAverages();
+
+  // ⏱️ Effet initial et intervalle
   useEffect(() => {
-    fetchData();
+    fetchAllSensors();
     fetchAlerts();
 
     const interval = setInterval(() => {
-      fetchData();
+      fetchAllSensors();
       fetchAlerts();
-    }, 10000); 
+    }, 15000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // La dernière donnée est à l'index 0 (si la requête API est correcte)
-  const latest = data[0] || {};
+  // 🎨 Déterminer la couleur de la carte
+  const getTemperatureColor = (temp: number) => {
+    if (temp > 35) return "temp-high";
+    if (temp < 20) return "temp-low";
+    return "temp-normal";
+  };
 
   return (
-    <IonPage>
+    <IonPage className="dashboard-container">
       <IonHeader>
-        <IonToolbar color="primary">
-          <IonTitle>🐔 Dashboard Poulailler</IonTitle>
-          <IonButton slot="end" color="danger" onClick={handleLogout}>
-            Déconnexion
+        <IonToolbar className="dashboard-header">
+          <IonTitle>
+            <IonIcon icon={thermometerOutline} /> Poulailler Intelligent
+          </IonTitle>
+          <IonButton slot="end" fill="clear" onClick={handleRefresh}>
+            <IonIcon icon={refreshOutline} />
+          </IonButton>
+          <IonButton slot="end" fill="clear" color="danger" onClick={handleLogout}>
+            <IonIcon icon={logOutOutline} />
           </IonButton>
         </IonToolbar>
       </IonHeader>
 
       <IonContent className="ion-padding">
+        {/* Bandeau d'alerte */}
+        {alerts.length > 0 && (
+          <IonCard className="alert-card">
+            <IonCardHeader>
+              <IonCardTitle>
+                <IonIcon icon={warningOutline} /> {alerts.length} Alerte{alerts.length > 1 ? 's' : ''} active{alerts.length > 1 ? 's' : ''}
+              </IonCardTitle>
+            </IonCardHeader>
+            <IonCardContent>
+              <IonList lines="none">
+                {alerts.slice(0, 2).map(alert => (
+                  <IonItem key={alert._id} color="light">
+                    <IonLabel>
+                      <h3 style={{ fontWeight: 'bold', color: '#333' }}>{alert.type}</h3>
+                      <p style={{ color: '#666' }}>{alert.message}</p>
+                      <small style={{ color: '#888' }}>
+                        {new Date(alert.timestamp).toLocaleString()}
+                      </small>
+                    </IonLabel>
+                  </IonItem>
+                ))}
+              </IonList>
+            </IonCardContent>
+          </IonCard>
+        )}
+
+        {/* Sélecteur de vue */}
+        <IonSegment 
+          value={viewMode} 
+          onIonChange={e => setViewMode(e.detail.value as any)}
+          className="custom-segment"
+        >
+          <IonSegmentButton value="overview">
+            <IonLabel>
+              <IonIcon icon={statsChartOutline} /> Vue d'ensemble
+            </IonLabel>
+          </IonSegmentButton>
+          <IonSegmentButton value="detailed">
+            <IonLabel>
+              <IonIcon icon={listOutline} /> Détail capteurs
+            </IonLabel>
+          </IonSegmentButton>
+        </IonSegment>
+
         {loading ? (
-          <div className="ion-text-center">
-            <IonSpinner name="crescent" />
-            <p>Chargement des données...</p>
+          <div className="loading-container">
+            <IonSpinner name="crescent" color="primary" />
+            <p className="loading-text">Chargement des données des capteurs...</p>
           </div>
         ) : (
           <>
-            {/* ALERTE AVEC VIBRATION */}
-            {showAlert && (
-              <IonAlert
-                isOpen={showAlert}
-                header="Alerte environnementale"
-                message={alertMessage}
-                buttons={["OK"]}
-                onDidDismiss={() => setShowAlert(false)}
-              />
+            {/* Vue d'ensemble */}
+            {viewMode === 'overview' && (
+              <>
+                {/* Stats globales */}
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <h3>{activeSensors.length}</h3>
+                    <p>Capteurs actifs</p>
+                  </div>
+                  <div className="stat-item">
+                    <h3>{safeToFixed(averages.temp, 1)}°C</h3>
+                    <p>Temp. moyenne</p>
+                  </div>
+                  <div className="stat-item">
+                    <h3>{safeToFixed(averages.hum, 1)}%</h3>
+                    <p>Hum. moyenne</p>
+                  </div>
+                  <div className="stat-item">
+                    <h3>{safeToFixed(averages.amm, 0)} ppm</h3>
+                    <p>NH₃ moyen</p>
+                  </div>
+                </div>
+
+                {/* Graphique d'évolution */}
+                {allSensors.length > 0 && (
+                  <div className="chart-container">
+                    <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>Évolution des températures</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={prepareChartData()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis 
+                          dataKey="time" 
+                          stroke="#7f8c8d"
+                          fontSize={12}
+                        />
+                        <YAxis 
+                          label={{ value: '°C', angle: -90, position: 'insideLeft' }}
+                          stroke="#7f8c8d"
+                          fontSize={12}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            borderRadius: '8px',
+                            border: '1px solid #e0e0e0'
+                          }}
+                        />
+                        <Legend />
+                        <Line 
+                          type="monotone" 
+                          dataKey="temp" 
+                          name="Température"
+                          stroke="#667eea"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Vue rapide des capteurs */}
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>📊 État des capteurs</IonCardTitle>
+                    <IonCardSubtitle>Dernière mise à jour: {lastUpdate}</IonCardSubtitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    <IonGrid>
+                      <IonRow>
+                        {activeSensors.map(sensor => (
+                          <IonCol size="6" sizeMd="4" key={sensor._id}>
+                            <div className="sensor-value">
+                              <IonIcon icon={thermometerOutline} />
+                              <h2>{safeToFixed(sensor.temperature, 1)}°C</h2>
+                              <p>Capteur {sensor.capteurNum}</p>
+                              <IonChip 
+                                color={sensor.temperature > 35 ? "danger" : sensor.temperature < 20 ? "warning" : "success"}
+                              >
+                                {sensor.temperature > 35 ? "Chaud" : sensor.temperature < 20 ? "Froid" : "Normal"}
+                              </IonChip>
+                            </div>
+                          </IonCol>
+                        ))}
+                      </IonRow>
+                    </IonGrid>
+                  </IonCardContent>
+                </IonCard>
+              </>
             )}
 
-            {/* CONTROLE DES EQUIPEMENTS */}
+            {/* Vue détaillée - LES 3 CAPTEURS */}
+            {viewMode === 'detailed' && (
+              <IonGrid>
+                <IonRow>
+                  {activeSensors.map(sensor => (
+                    <IonCol size="12" sizeMd="6" sizeLg="4" key={sensor._id}>
+                      <IonCard className={`sensor-card ${getTemperatureColor(sensor.temperature)}`}>
+                        <IonCardHeader>
+                          <IonCardTitle>
+                            📟 Capteur {sensor.capteurNum}
+                          </IonCardTitle>
+                          <IonCardSubtitle>
+                            Mis à jour: {sensor.lastUpdated}
+                          </IonCardSubtitle>
+                        </IonCardHeader>
+                        <IonCardContent>
+                          <IonGrid>
+                            <IonRow>
+                              <IonCol size="6">
+                                <div className="sensor-value">
+                                  <IonIcon icon={thermometerOutline} />
+                                  <h2>{safeToFixed(sensor.temperature, 1)}°C</h2>
+                                  <p>Température</p>
+                                </div>
+                              </IonCol>
+                              <IonCol size="6">
+                                <div className="sensor-value">
+                                  <IonIcon icon={waterOutline} />
+                                  <h2>{safeToFixed(sensor.humidity, 1)}%</h2>
+                                  <p>Humidité</p>
+                                </div>
+                              </IonCol>
+                            </IonRow>
+                            <IonRow>
+                              <IonCol size="6">
+                                <div className="sensor-value">
+                                  <IonIcon icon={warningOutline} />
+                                  <h2>{safeToFixed(sensor.ammonia, 0)} ppm</h2>
+                                  <p>Ammoniac</p>
+                                </div>
+                              </IonCol>
+                              <IonCol size="6">
+                                <div className="sensor-value">
+                                  <IonIcon icon={sunnyOutline} />
+                                  <h2>{safeToFixed(sensor.luminosity, 0)} lx</h2>
+                                  <p>Luminosité</p>
+                                </div>
+                              </IonCol>
+                            </IonRow>
+                          </IonGrid>
+                          <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                            <small style={{ color: '#95a5a6', fontSize: '0.8rem' }}>
+                              ID: {sensor.deviceId}
+                            </small>
+                          </div>
+                        </IonCardContent>
+                      </IonCard>
+                    </IonCol>
+                  ))}
+                </IonRow>
+              </IonGrid>
+            )}
+
+            {/* Contrôle des actionneurs */}
             <IonCard>
               <IonCardHeader>
-                <IonCardTitle>⚙️ Contrôle des équipements</IonCardTitle>
+                <IonCardTitle>⚙️ Contrôle manuel</IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
                 <IonGrid>
                   <IonRow>
                     <IonCol>
-                      <IonButton
+                      <IonButton 
                         expand="block"
-                        color={fanOn ? "success" : "medium"}
-                        onClick={() => toggleDevice("fan")}
+                        className={`control-button ${controls.fan ? 'control-button-on' : 'control-button-off'}`}
+                        onClick={() => controlESP32('fan', controls.fan ? 'off' : 'on')}
                       >
-                        {fanOn ? "🌀 Ventilateur ON" : "🌀 Ventilateur OFF"}
+                        <IonIcon icon={flashOutline} slot="start" />
+                        {controls.fan ? "Ventilateur ON" : "Ventilateur OFF"}
                       </IonButton>
                     </IonCol>
                     <IonCol>
-                      <IonButton
+                      <IonButton 
                         expand="block"
-                        color={lampOn ? "warning" : "medium"}
-                        onClick={() => toggleDevice("lamp")}
+                        className={`control-button ${controls.lamp ? 'control-button-on' : 'control-button-off'}`}
+                        onClick={() => controlESP32('lamp', controls.lamp ? 'off' : 'on')}
                       >
-                        {lampOn ? "💡 Lampe ON" : "💡 Lampe OFF"}
+                        <IonIcon icon={bulbOutline} slot="start" />
+                        {controls.lamp ? "Lampe ON" : "Lampe OFF"}
                       </IonButton>
                     </IonCol>
                     <IonCol>
-                      <IonButton
+                      <IonButton 
                         expand="block"
-                        color={waterOn ? "tertiary" : "medium"}
-                        onClick={() => toggleDevice("water")}
+                        className={`control-button ${controls.water ? 'control-button-on' : 'control-button-off'}`}
+                        onClick={() => controlESP32('water', controls.water ? 'off' : 'on')}
                       >
-                        {waterOn ? "🚰 Abreuvoir ON" : "🚰 Abreuvoir OFF"}
+                        <IonIcon icon={waterOutline} slot="start" />
+                        {controls.water ? "Eau ON" : "Eau OFF"}
+                      </IonButton>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow>
+                    <IonCol className="ion-text-center" style={{ marginTop: '15px' }}>
+                      <IonButton 
+                        color="medium" 
+                        fill="outline"
+                        onClick={() => {
+                          controlESP32('fan', 'off');
+                          controlESP32('lamp', 'off');
+                          controlESP32('water', 'off');
+                          setControls({ fan: false, lamp: false, water: false });
+                        }}
+                      >
+                        Tout éteindre
                       </IonButton>
                     </IonCol>
                   </IonRow>
@@ -303,144 +859,53 @@ const Dashboard: React.FC = () => {
               </IonCardContent>
             </IonCard>
 
-            {/* DONNEES RECENTES */}
-            <IonGrid>
-              <IonRow>
-                <IonCol size="6">
-                  <IonCard>
-                    <IonCardHeader>
-                      <IonCardTitle>🌡️ Température</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                      <h2>{safeToFixed(latest.temperature, 1)} °C</h2> 
-                      {latest.temperature > 35 && (
-                        <IonChip color="danger">🔥 Trop chaud</IonChip>
-                      )}
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol>
-
-                <IonCol size="6">
-                  <IonCard>
-                    <IonCardHeader>
-                      <IonCardTitle>💧 Humidité</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                      <h2>{safeToFixed(latest.humidity, 1)} %</h2>
-                      {latest.humidity < 30 && (
-                        <IonChip color="warning">⚠️ Faible humidité</IonChip>
-                      )}
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol>
-              </IonRow>
-
-              <IonRow>
-                <IonCol size="6">
-                  <IonCard>
-                    <IonCardHeader>
-                      <IonCardTitle>☁️ Ammoniac (NH₃)</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                      <h2>{safeToFixed(latest.ammonia, 0)} ppm</h2>
-                      {latest.ammonia > 25 && (
-                        <IonChip color="danger">☠️ Niveau dangereux</IonChip>
-                      )}
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol> {/* <-- FERMETURE CORRECTE DE LA BALISE IONIC */}
-
-                <IonCol size="6">
-                  <IonCard>
-                    <IonCardHeader>
-                      <IonCardTitle>💡 Luminosité</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                      <h2>{safeToFixed(latest.luminosity, 0)} lx</h2>
-                    </IonCardContent>
-                  </IonCard>
-                </IonCol>
-              </IonRow>
-            </IonGrid>
-
-            {/* GRAPHIQUE */}
+            {/* Informations système */}
             <IonCard>
               <IonCardHeader>
-                <IonCardTitle>Évolution des mesures</IonCardTitle>
+                <IonCardTitle>📋 Informations système</IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={data}>
-                    <Line type="monotone" dataKey="temperature" stroke="#ff7300" />
-                    <Line type="monotone" dataKey="humidity" stroke="#007bff" />
-                    <CartesianGrid stroke="#ccc" />
-                    <XAxis dataKey="timestamp" hide />
-                    <YAxis />
-                    <Tooltip />
-                  </LineChart>
-                </ResponsiveContainer>
-              </IonCardContent>
-            </IonCard>
-
-            {/* LISTE DES ALERTES */}
-            <IonCard>
-              <IonCardHeader>
-                <IonCardTitle>📢 Alertes récentes</IonCardTitle>
-              </IonCardHeader>
-              <IonCardContent>
-                <IonList>
-                  {alerts.length === 0 ? (
-                    <IonItem><IonLabel>Aucune alerte.</IonLabel></IonItem>
-                  ) : (
-                    alerts.map((a, i) => (
-                      <IonItem key={i} color="danger">
-                        <IonLabel>
-                          <h2>{a.type}</h2>
-                          <p>{a.message}</p>
-                          <small>{new Date(a.timestamp).toLocaleString()}</small>
-                        </IonLabel>
-                      </IonItem>
-                    ))
-                  )}
-                </IonList>
-              </IonCardContent>
-            </IonCard>
-
-            {/* HISTORIQUE */}
-            <IonCard>
-              <IonCardHeader>
-                {/* CORRECTION DE LA FAUTE DE FRAPPE IonFName -> IonCardTitle */}
-                <IonCardTitle>Historique des mesures</IonCardTitle> 
-              </IonCardHeader>
-              <IonCardContent>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#f0f0f0" }}>
-                        <th>Date</th>
-                        <th>Temp (°C)</th>
-                        <th>Humidité (%)</th>
-                        <th>NH₃ (ppm)</th>
-                        <th>Luminosité (lx)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.timestamp}</td>
-                          <td>{safeToFixed(item.temperature, 1)}</td>
-                          <td>{safeToFixed(item.humidity, 1)}</td>
-                          <td>{safeToFixed(item.ammonia, 0)}</td>
-                          <td>{safeToFixed(item.luminosity, 0)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <IonGrid>
+                  <IonRow>
+                    <IonCol>
+                      <div className="sensor-value" style={{ background: 'transparent' }}>
+                        <h3 style={{ color: '#667eea' }}>{allSensors.length}</h3>
+                        <p>Relevés totaux</p>
+                      </div>
+                    </IonCol>
+                    <IonCol>
+                      <div className="sensor-value" style={{ background: 'transparent' }}>
+                        <h3 style={{ color: '#667eea' }}>{activeSensors.length}</h3>
+                        <p>Capteurs actifs</p>
+                      </div>
+                    </IonCol>
+                    <IonCol>
+                      <div className="sensor-value" style={{ background: 'transparent' }}>
+                        <h3 style={{ color: '#667eea' }}>{alerts.length}</h3>
+                        <p>Alertes actives</p>
+                      </div>
+                    </IonCol>
+                    <IonCol>
+                      <div className="sensor-value" style={{ background: 'transparent' }}>
+                        <h3 style={{ color: '#667eea' }}>{lastUpdate}</h3>
+                        <p>Dernière mise à jour</p>
+                      </div>
+                    </IonCol>
+                  </IonRow>
+                </IonGrid>
               </IonCardContent>
             </IonCard>
           </>
         )}
+
+        {/* Alert Ionic */}
+        <IonAlert
+          isOpen={showAlert}
+          onDidDismiss={() => setShowAlert(false)}
+          header="⚠️ Alerte détectée"
+          message={alertMessage}
+          buttons={['Compris']}
+        />
       </IonContent>
     </IonPage>
   );
