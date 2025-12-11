@@ -1,4 +1,4 @@
-// Dashboard.tsx - VERSION CORRIGÉE
+// Dashboard.tsx - AVEC NOMS DE CAPTEURS PERSONNALISÉS
 import React, { useEffect, useState } from "react";
 import {
   IonPage,
@@ -36,7 +36,11 @@ import {
   refreshOutline,
   logOutOutline,
   statsChartOutline,
-  listOutline
+  listOutline,
+  eggOutline,
+  nutritionOutline,
+  accessibilityOutline,
+  powerOutline
 } from "ionicons/icons";
 
 import {
@@ -82,6 +86,38 @@ interface ControlState {
   lamp: boolean;
   water: boolean;
 }
+
+// NOMS PERSONNALISÉS DES CAPTEURS
+const SENSOR_NAMES: { [key: number]: { name: string; icon: any; description: string } } = {
+  1: {
+    name: "Poulailler Poussins",
+    icon: accessibilityOutline,
+    description: "Zone d'élevage des poussins (0-4 semaines)"
+  },
+  2: {
+    name: "Poulailler Poules de Chair",
+    icon: nutritionOutline,
+    description: "Zone d'engraissement pour la viande"
+  },
+  3: {
+    name: "Poules Pondeuses",
+    icon: eggOutline,
+    description: "Zone des poules pondeuses pour les œufs"
+  }
+};
+
+// Fonction pour obtenir le nom du capteur
+const getSensorName = (capteurNum: number): string => {
+  return SENSOR_NAMES[capteurNum]?.name || `Capteur ${capteurNum}`;
+};
+
+const getSensorIcon = (capteurNum: number) => {
+  return SENSOR_NAMES[capteurNum]?.icon || thermometerOutline;
+};
+
+const getSensorDescription = (capteurNum: number): string => {
+  return SENSOR_NAMES[capteurNum]?.description || "Capteur de température et humidité";
+};
 
 // --- STYLES CSS INTÉGRÉS ---
 const dashboardStyles = `
@@ -131,9 +167,43 @@ const dashboardStyles = `
 .sensor-value ion-icon {
   font-size: 2.5rem;
   margin-bottom: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+}
+
+/* Couleurs spécifiques pour chaque type de capteur */
+.sensor-poussin {
+  background: linear-gradient(135deg, #36d1dc, #5b86e5) !important;
+  color: white !important;
+}
+
+.sensor-poussin ion-icon {
+  color: #36d1dc !important;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: #36d1dc;
+  background: transparent;
+}
+
+.sensor-chair {
+  background: linear-gradient(135deg, #00b09b, #96c93d) !important;
+  color: white !important;
+}
+
+.sensor-chair ion-icon {
+  color: #00b09b !important;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: #00b09b;
+  background: transparent;
+}
+
+.sensor-pondeuse {
+  background: linear-gradient(135deg, #ff9966, #ff5e62) !important;
+  color: white !important;
+}
+
+.sensor-pondeuse ion-icon {
+  color: #ff9966 !important;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: #ff9966;
+  background: transparent;
 }
 
 /* Temperature status */
@@ -263,6 +333,14 @@ const dashboardStyles = `
   font-weight: 600;
 }
 
+/* Sensor description */
+.sensor-description {
+  font-size: 0.85rem;
+  color: #95a5a6;
+  margin: 8px 0 16px 0;
+  font-style: italic;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .sensor-value h2 {
@@ -333,7 +411,7 @@ const Dashboard: React.FC = () => {
   };
 
   // ================================
-  // 🔄 CHARGER LES 3 CAPTEURS - VERSION CORRIGÉE
+  // 🔄 CHARGER LES 3 CAPTEURS 
   // ================================
   const fetchAllSensors = async () => {
     try {
@@ -379,10 +457,10 @@ const Dashboard: React.FC = () => {
           deviceId: "device1-capteur1",
           originalDevice: "device1",
           capteurNum: 1,
-          temperature: 23.2,
-          humidity: 55.0,
-          ammonia: 0,
-          luminosity: 0,
+          temperature: 32.2,
+          humidity: 60.0,
+          ammonia: 5,
+          luminosity: 300,
           timestamp: new Date().toLocaleString(),
           lastUpdated: new Date().toLocaleTimeString()
         },
@@ -391,10 +469,10 @@ const Dashboard: React.FC = () => {
           deviceId: "device1-capteur2",
           originalDevice: "device1",
           capteurNum: 2,
-          temperature: 23.5,
-          humidity: 52.0,
-          ammonia: 0,
-          luminosity: 0,
+          temperature: 25.5,
+          humidity: 55.0,
+          ammonia: 8,
+          luminosity: 450,
           timestamp: new Date().toLocaleString(),
           lastUpdated: new Date().toLocaleTimeString()
         },
@@ -403,10 +481,10 @@ const Dashboard: React.FC = () => {
           deviceId: "device1-capteur3",
           originalDevice: "device1",
           capteurNum: 3,
-          temperature: 20.4,
-          humidity: 56.0,
-          ammonia: 0,
-          luminosity: 0,
+          temperature: 22.4,
+          humidity: 58.0,
+          ammonia: 12,
+          luminosity: 600,
           timestamp: new Date().toLocaleString(),
           lastUpdated: new Date().toLocaleTimeString()
         }
@@ -431,14 +509,16 @@ const Dashboard: React.FC = () => {
     let alertMsg = "";
     
     sensors.forEach(sensor => {
+      const sensorName = getSensorName(sensor.capteurNum);
+      
       if (sensor.ammonia > 25) {
-        alertMsg = `⚠️ Capteur ${sensor.capteurNum}: Ammoniac élevé (${sensor.ammonia} ppm)`;
+        alertMsg = `⚠️ ${sensorName}: Ammoniac élevé (${sensor.ammonia} ppm)`;
         hasAlert = true;
       } else if (sensor.temperature > 35) {
-        alertMsg = `🔥 Capteur ${sensor.capteurNum}: Température élevée (${sensor.temperature}°C)`;
+        alertMsg = `🔥 ${sensorName}: Température élevée (${sensor.temperature}°C)`;
         hasAlert = true;
       } else if (sensor.humidity < 30) {
-        alertMsg = `💧 Capteur ${sensor.capteurNum}: Humidité faible (${sensor.humidity}%)`;
+        alertMsg = `💧 ${sensorName}: Humidité faible (${sensor.humidity}%)`;
         hasAlert = true;
       }
     });
@@ -538,7 +618,8 @@ const Dashboard: React.FC = () => {
       time: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       temp: item.temperature,
       hum: item.humidity,
-      sensor: `Capteur ${item.capteurNum}`
+      sensor: getSensorName(item.capteurNum),
+      zone: item.capteurNum
     }));
   };
 
@@ -571,11 +652,35 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // 🎨 Déterminer la couleur de la carte
+  // 🎨 Déterminer la couleur de la carte selon le type de capteur
+  const getSensorCardClass = (capteurNum: number): string => {
+    switch(capteurNum) {
+      case 1: return "sensor-poussin";
+      case 2: return "sensor-chair";
+      case 3: return "sensor-pondeuse";
+      default: return "temp-normal";
+    }
+  };
+
+  // 🎨 Déterminer la couleur selon la température
   const getTemperatureColor = (temp: number) => {
     if (temp > 35) return "temp-high";
     if (temp < 20) return "temp-low";
     return "temp-normal";
+  };
+
+  // 🔤 Déterminer les seuils optimaux selon le type de poulailler
+  const getOptimalRange = (capteurNum: number) => {
+    switch(capteurNum) {
+      case 1: // Poussins
+        return "32-35°C idéal pour poussins";
+      case 2: // Poules de chair
+        return "20-24°C idéal pour croissance";
+      case 3: // Poules pondeuses
+        return "18-22°C idéal pour ponte";
+      default:
+        return "20-25°C température normale";
+    }
   };
 
   return (
@@ -583,7 +688,7 @@ const Dashboard: React.FC = () => {
       <IonHeader>
         <IonToolbar className="dashboard-header">
           <IonTitle>
-            <IonIcon icon={thermometerOutline} /> Poulailler Intelligent
+            <IonIcon icon={eggOutline} /> Ferme Avicole Intelligente
           </IonTitle>
           <IonButton slot="end" fill="clear" onClick={handleRefresh}>
             <IonIcon icon={refreshOutline} />
@@ -634,7 +739,7 @@ const Dashboard: React.FC = () => {
           </IonSegmentButton>
           <IonSegmentButton value="detailed">
             <IonLabel>
-              <IonIcon icon={listOutline} /> Détail capteurs
+              <IonIcon icon={listOutline} /> Zones détaillées
             </IonLabel>
           </IonSegmentButton>
         </IonSegment>
@@ -642,7 +747,7 @@ const Dashboard: React.FC = () => {
         {loading ? (
           <div className="loading-container">
             <IonSpinner name="crescent" color="primary" />
-            <p className="loading-text">Chargement des données des capteurs...</p>
+            <p className="loading-text">Chargement des données des zones...</p>
           </div>
         ) : (
           <>
@@ -653,26 +758,26 @@ const Dashboard: React.FC = () => {
                 <div className="stats-grid">
                   <div className="stat-item">
                     <h3>{activeSensors.length}</h3>
-                    <p>Capteurs actifs</p>
+                    <p>Zones surveillées</p>
                   </div>
                   <div className="stat-item">
                     <h3>{safeToFixed(averages.temp, 1)}°C</h3>
-                    <p>Temp. moyenne</p>
+                    <p>Temp. moyenne globale</p>
                   </div>
                   <div className="stat-item">
                     <h3>{safeToFixed(averages.hum, 1)}%</h3>
-                    <p>Hum. moyenne</p>
+                    <p>Hum. moyenne globale</p>
                   </div>
                   <div className="stat-item">
                     <h3>{safeToFixed(averages.amm, 0)} ppm</h3>
-                    <p>NH₃ moyen</p>
+                    <p>NH₃ moyen global</p>
                   </div>
                 </div>
 
                 {/* Graphique d'évolution */}
                 {allSensors.length > 0 && (
                   <div className="chart-container">
-                    <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>Évolution des températures</h3>
+                    <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>Températures par zone</h3>
                     <ResponsiveContainer width="100%" height={250}>
                       <LineChart data={prepareChartData()}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -691,6 +796,16 @@ const Dashboard: React.FC = () => {
                             borderRadius: '8px',
                             border: '1px solid #e0e0e0'
                           }}
+                          formatter={(value, name, props) => {
+                            if (name === "temp") return [`${value}°C`, "Température"];
+                            return value;
+                          }}
+                          labelFormatter={(label, items) => {
+                            if (items && items[0]) {
+                              return getSensorName(items[0].payload.zone);
+                            }
+                            return label;
+                          }}
                         />
                         <Legend />
                         <Line 
@@ -707,10 +822,10 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* Vue rapide des capteurs */}
+                {/* Vue rapide des zones */}
                 <IonCard>
                   <IonCardHeader>
-                    <IonCardTitle>📊 État des capteurs</IonCardTitle>
+                    <IonCardTitle>📊 Vue rapide des zones</IonCardTitle>
                     <IonCardSubtitle>Dernière mise à jour: {lastUpdate}</IonCardSubtitle>
                   </IonCardHeader>
                   <IonCardContent>
@@ -719,13 +834,13 @@ const Dashboard: React.FC = () => {
                         {activeSensors.map(sensor => (
                           <IonCol size="6" sizeMd="4" key={sensor._id}>
                             <div className="sensor-value">
-                              <IonIcon icon={thermometerOutline} />
+                              <IonIcon icon={getSensorIcon(sensor.capteurNum)} />
                               <h2>{safeToFixed(sensor.temperature, 1)}°C</h2>
-                              <p>Capteur {sensor.capteurNum}</p>
+                              <p>{getSensorName(sensor.capteurNum)}</p>
                               <IonChip 
                                 color={sensor.temperature > 35 ? "danger" : sensor.temperature < 20 ? "warning" : "success"}
                               >
-                                {sensor.temperature > 35 ? "Chaud" : sensor.temperature < 20 ? "Froid" : "Normal"}
+                                {getOptimalRange(sensor.capteurNum)}
                               </IonChip>
                             </div>
                           </IonCol>
@@ -737,22 +852,26 @@ const Dashboard: React.FC = () => {
               </>
             )}
 
-            {/* Vue détaillée - LES 3 CAPTEURS */}
+            {/* Vue détaillée - LES 3 ZONES */}
             {viewMode === 'detailed' && (
               <IonGrid>
                 <IonRow>
                   {activeSensors.map(sensor => (
                     <IonCol size="12" sizeMd="6" sizeLg="4" key={sensor._id}>
-                      <IonCard className={`sensor-card ${getTemperatureColor(sensor.temperature)}`}>
+                      <IonCard className={`sensor-card ${getSensorCardClass(sensor.capteurNum)}`}>
                         <IonCardHeader>
                           <IonCardTitle>
-                            📟 Capteur {sensor.capteurNum}
+                            <IonIcon icon={getSensorIcon(sensor.capteurNum)} /> {getSensorName(sensor.capteurNum)}
                           </IonCardTitle>
                           <IonCardSubtitle>
-                            Mis à jour: {sensor.lastUpdated}
+                            Zone {sensor.capteurNum} • Mis à jour: {sensor.lastUpdated}
                           </IonCardSubtitle>
                         </IonCardHeader>
                         <IonCardContent>
+                          <div className="sensor-description">
+                            {getSensorDescription(sensor.capteurNum)}
+                          </div>
+                          
                           <IonGrid>
                             <IonRow>
                               <IonCol size="6">
@@ -760,6 +879,7 @@ const Dashboard: React.FC = () => {
                                   <IonIcon icon={thermometerOutline} />
                                   <h2>{safeToFixed(sensor.temperature, 1)}°C</h2>
                                   <p>Température</p>
+                                  <small>{getOptimalRange(sensor.capteurNum)}</small>
                                 </div>
                               </IonCol>
                               <IonCol size="6">
@@ -767,6 +887,7 @@ const Dashboard: React.FC = () => {
                                   <IonIcon icon={waterOutline} />
                                   <h2>{safeToFixed(sensor.humidity, 1)}%</h2>
                                   <p>Humidité</p>
+                                  <small>50-70% idéal</small>
                                 </div>
                               </IonCol>
                             </IonRow>
@@ -776,6 +897,7 @@ const Dashboard: React.FC = () => {
                                   <IonIcon icon={warningOutline} />
                                   <h2>{safeToFixed(sensor.ammonia, 0)} ppm</h2>
                                   <p>Ammoniac</p>
+                                  <small>&lt;20 ppm recommandé</small>
                                 </div>
                               </IonCol>
                               <IonCol size="6">
@@ -783,14 +905,24 @@ const Dashboard: React.FC = () => {
                                   <IonIcon icon={sunnyOutline} />
                                   <h2>{safeToFixed(sensor.luminosity, 0)} lx</h2>
                                   <p>Luminosité</p>
+                                  <small>300-500 lx optimal</small>
                                 </div>
                               </IonCol>
                             </IonRow>
                           </IonGrid>
+                          
                           <div style={{ marginTop: '15px', textAlign: 'center' }}>
-                            <small style={{ color: '#95a5a6', fontSize: '0.8rem' }}>
-                              ID: {sensor.deviceId}
-                            </small>
+                            <IonChip 
+                              color={
+                                sensor.temperature > 35 ? "danger" : 
+                                sensor.temperature < 20 ? "warning" : 
+                                "success"
+                              }
+                            >
+                              {sensor.temperature > 35 ? "CHAUDE ⚠️" : 
+                               sensor.temperature < 20 ? "FROIDE ❄️" : 
+                               "CONFORME ✅"}
+                            </IonChip>
                           </div>
                         </IonCardContent>
                       </IonCard>
@@ -803,7 +935,7 @@ const Dashboard: React.FC = () => {
             {/* Contrôle des actionneurs */}
             <IonCard>
               <IonCardHeader>
-                <IonCardTitle>⚙️ Contrôle manuel</IonCardTitle>
+                <IonCardTitle>⚙️ Contrôle manuel des équipements</IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
                 <IonGrid>
@@ -815,7 +947,7 @@ const Dashboard: React.FC = () => {
                         onClick={() => controlESP32('fan', controls.fan ? 'off' : 'on')}
                       >
                         <IonIcon icon={flashOutline} slot="start" />
-                        {controls.fan ? "Ventilateur ON" : "Ventilateur OFF"}
+                        {controls.fan ? "Ventilation ON" : "Ventilation OFF"}
                       </IonButton>
                     </IonCol>
                     <IonCol>
@@ -825,7 +957,7 @@ const Dashboard: React.FC = () => {
                         onClick={() => controlESP32('lamp', controls.lamp ? 'off' : 'on')}
                       >
                         <IonIcon icon={bulbOutline} slot="start" />
-                        {controls.lamp ? "Lampe ON" : "Lampe OFF"}
+                        {controls.lamp ? "Éclairage ON" : "Éclairage OFF"}
                       </IonButton>
                     </IonCol>
                     <IonCol>
@@ -835,7 +967,7 @@ const Dashboard: React.FC = () => {
                         onClick={() => controlESP32('water', controls.water ? 'off' : 'on')}
                       >
                         <IonIcon icon={waterOutline} slot="start" />
-                        {controls.water ? "Eau ON" : "Eau OFF"}
+                        {controls.water ? "Abreuvoir ON" : "Abreuvoir OFF"}
                       </IonButton>
                     </IonCol>
                   </IonRow>
@@ -851,7 +983,8 @@ const Dashboard: React.FC = () => {
                           setControls({ fan: false, lamp: false, water: false });
                         }}
                       >
-                        Tout éteindre
+                        <IonIcon icon={powerOutline} slot="start" />
+                        Éteindre tous les équipements
                       </IonButton>
                     </IonCol>
                   </IonRow>
@@ -862,7 +995,7 @@ const Dashboard: React.FC = () => {
             {/* Informations système */}
             <IonCard>
               <IonCardHeader>
-                <IonCardTitle>📋 Informations système</IonCardTitle>
+                <IonCardTitle>📋 Résumé de la ferme</IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
                 <IonGrid>
@@ -870,13 +1003,7 @@ const Dashboard: React.FC = () => {
                     <IonCol>
                       <div className="sensor-value" style={{ background: 'transparent' }}>
                         <h3 style={{ color: '#667eea' }}>{allSensors.length}</h3>
-                        <p>Relevés totaux</p>
-                      </div>
-                    </IonCol>
-                    <IonCol>
-                      <div className="sensor-value" style={{ background: 'transparent' }}>
-                        <h3 style={{ color: '#667eea' }}>{activeSensors.length}</h3>
-                        <p>Capteurs actifs</p>
+                        <p>Zones surveillées</p>
                       </div>
                     </IonCol>
                     <IonCol>
@@ -888,7 +1015,18 @@ const Dashboard: React.FC = () => {
                     <IonCol>
                       <div className="sensor-value" style={{ background: 'transparent' }}>
                         <h3 style={{ color: '#667eea' }}>{lastUpdate}</h3>
-                        <p>Dernière mise à jour</p>
+                        <p>Dernier relevé</p>
+                      </div>
+                    </IonCol>
+                  </IonRow>
+                  <IonRow>
+                    <IonCol>
+                      <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                        <small style={{ color: '#95a5a6' }}>
+                          🐥 <strong>Zone 1</strong>: Poussins (0-4 semaines)<br />
+                          🍗 <strong>Zone 2</strong>: Poules de chair (engraissement)<br />
+                          🥚 <strong>Zone 3</strong>: Poules pondeuses
+                        </small>
                       </div>
                     </IonCol>
                   </IonRow>
